@@ -10,6 +10,7 @@ client_configs/*.yaml
 old_results
 
 output/*
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
