@@ -9,6 +9,8 @@ results
 client_configs/*.yaml
 old_results
 
+output/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
