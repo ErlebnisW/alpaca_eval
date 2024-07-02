@@ -60,12 +60,20 @@ def vllm_local_completions(
         model_kwargs["max_num_seqs"] = batch_size
 
     if model_name != llmModelName:
-        logging.info(f"vllm already loaded model: {llmModelName} but requested {model_name}. Let's switch...")
+        logging.info(
+            f"vllm already loaded model: {llmModelName} but requested {model_name}. Let's switch..."
+        )
         llm = None
 
     if llm is None:
         logging.info(f"vllm: loading model: {model_name}, {model_kwargs}")
-        llm = LLM(model=model_name, tokenizer=model_name, **model_kwargs)
+        llm = LLM(
+            model=model_name,
+            tokenizer=model_name,
+            tensor_parallel_size=8,
+            gpu_memory_utilization=0.95,
+            **model_kwargs,
+        )
         llmModelName = model_name
         if is_chatml_prompt:
             tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -76,13 +84,16 @@ def vllm_local_completions(
     if is_chatml_prompt:
         # convert the linear prompt to chatml
         prompts = [
-            tokenizer.apply_chat_template(utils.prompt_to_chatml(prompt), add_generation_prompt=True, tokenize=False)
+            tokenizer.apply_chat_template(
+                utils.prompt_to_chatml(prompt), add_generation_prompt=True, tokenize=False
+            )
             for prompt in prompts
         ]
 
     with utils.Timer() as t:
         outputs = llm.generate(prompts, sampling_params)
     completions = [output.outputs[0].text for output in outputs]
+
     price = [np.nan] * len(completions)
     avg_time = [t.duration / len(prompts)] * len(completions)
     return dict(completions=completions, price_per_example=price, time_per_example=avg_time)
