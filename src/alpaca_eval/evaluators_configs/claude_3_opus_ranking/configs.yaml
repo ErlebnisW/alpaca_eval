@@ -2,7 +2,7 @@ claude_3_opus_ranking:
   prompt_template: "claude_3_opus_ranking/ranking_prompt.txt"
   fn_completions: "anthropic_completions"
   completions_kwargs:
-    model_name: "claude-3-opus-20240229"
+    model_name: "claude-3-5-sonnet-20240620"
     max_tokens_to_sample: 100
     temperature: 0
     price_per_token: 15e-6
