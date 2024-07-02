@@ -110,6 +110,7 @@ def get_length_controlled_winrate(
     if save_weights_dir is not None:
         save_weights_dir = Path(save_weights_dir) / glm_name
         save_weights_dir.mkdir(exist_ok=True, parents=True)
+        baseline_name = baseline_name.split('/')[-1]
         weights_path = save_weights_dir / f"baseline_{baseline_name}.csv"
         if weights_path.exists():
             saved_weights = pd.read_csv(weights_path, index_col=0)
