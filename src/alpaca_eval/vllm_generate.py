@@ -7,6 +7,10 @@ import datasets
 from rich.progress import track
 import torch
 
+PROMPT_BEGIN: str = 'BEGINNING OF CONVERSATION: '
+PROMPT_USER: str = 'USER: {input} '
+PROMPT_ASSISTANT: str = 'ASSISTANT:'
+PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER + PROMPT_ASSISTANT
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
@@ -45,6 +49,17 @@ def parse_arguments() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+def extract(prompt: str) -> str:
+    """Extract the original instruction from a constructed prompt."""
+    # Remove PROMPT_BEGIN
+    without_begin = prompt.replace(PROMPT_BEGIN, '', 1)
+    # Remove PROMPT_USER
+    without_user = without_begin.replace(PROMPT_USER, '', 1)
+    # Remove PROMPT_ASSISTANT and everything after it
+    instruction = without_user.split(PROMPT_ASSISTANT)[0]
+    # Strip any leading/trailing whitespace
+    return instruction.lstrip('USER:').strip()
+
 def generate_answers(args, model_name_or_path: str, batch_size: int) -> list[dict]:
     # Get the number of available GPUs
     num_gpus = torch.cuda.device_count()
@@ -57,7 +72,7 @@ def generate_answers(args, model_name_or_path: str, batch_size: int) -> list[dic
     eval_set = datasets.load_dataset("tatsu-lab/alpaca_eval", "alpaca_eval")["eval"]
     print(f'Generating answers with {model_name_or_path} using vllm')
     
-    prompts = [example["instruction"] for example in eval_set]
+    prompts = [PROMPT_INPUT.format(input=example["instruction"]) for example in eval_set]
     
     sampling_params = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens)
     
@@ -65,10 +80,10 @@ def generate_answers(args, model_name_or_path: str, batch_size: int) -> list[dic
     for i in track(range(0, len(prompts), batch_size), description="Generating..."):
         batch_prompts = prompts[i:i+batch_size]
         outputs = llm.generate(batch_prompts, sampling_params)
-        
+     
         for prompt, output in zip(batch_prompts, outputs):
             result = {
-                "instruction": prompt,  # Extract instruction part
+                "instruction": extract(prompt),  # Extract instruction part
                 "output": output.outputs[0].text,
                 "generator": model_name_or_path
             }
