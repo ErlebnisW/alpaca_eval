@@ -1,0 +1,85 @@
+from __future__ import annotations
+import argparse
+import json
+import os
+from vllm import LLM, SamplingParams
+import datasets
+from rich.progress import track
+import torch
+
+# Constants previously imported from safe_rlhf
+PROMPT_BEGIN: str = 'BEGINNING OF CONVERSATION: '
+PROMPT_USER: str = 'USER: {input} '
+PROMPT_ASSISTANT: str = 'ASSISTANT:'  # should not have a space at the end
+PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER + PROMPT_ASSISTANT
+
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Evaluate models with vllm, utilizing all GPUs',
+    )
+    parser.add_argument(
+        '--model_name_or_path',
+        type=str,
+        help='The name or path of the model to load',
+        required=True,
+    )
+    parser.add_argument(
+        '--output_dir',
+        type=str,
+        default='outputs/alpaca/',
+        help='Where to store the evaluation output.',
+    )
+    parser.add_argument(
+        '--batch_size',
+        type=int,
+        default=32,
+        help='Batch size for generation',
+    )
+    return parser.parse_args()
+
+def generate_answers(model_name_or_path: str, batch_size: int) -> list[dict]:
+    # Get the number of available GPUs
+    num_gpus = torch.cuda.device_count()
+    print(f"Using {num_gpus} GPUs")
+
+    # Initialize LLM using all available GPUs
+    with torch.no_grad():
+    llm = LLM(model=model_name_or_path, tensor_parallel_size=num_gpus)
+    
+    eval_set = datasets.load_dataset("tatsu-lab/alpaca_eval", "alpaca_eval")["eval"]
+    print(f'Generating answers with {model_name_or_path} using vllm')
+    
+    prompts = [PROMPT_INPUT.format(input=example["instruction"]) for example in eval_set]
+    
+    sampling_params = SamplingParams(temperature=0.7, max_tokens=2048)
+    
+    results = []
+    for i in track(range(0, len(prompts), batch_size), description="Generating..."):
+        batch_prompts = prompts[i:i+batch_size]
+        outputs = llm.generate(batch_prompts, sampling_params)
+        
+        for prompt, output in zip(batch_prompts, outputs):
+            result = {
+                "instruction": prompt[len(PROMPT_INPUT.format(input="")):],  # Extract instruction part
+                "output": output.outputs[0].text,
+                "generator": model_name_or_path
+            }
+            results.append(result)
+    
+    return results
+
+def main() -> None:
+    """Main function."""
+    args = parse_arguments()
+    output_dir = args.output_dir
+    os.makedirs(output_dir, exist_ok=True) 
+    generate_file = os.path.join(output_dir, 'generated_answers.json')
+    
+    answers = generate_answers(args.model_name_or_path, args.batch_size)
+    
+    with open(generate_file, 'w', encoding='utf-8') as f:
+        json.dump(answers, f, indent=4, ensure_ascii=False)
+
+if __name__ == '__main__':
+    main()
