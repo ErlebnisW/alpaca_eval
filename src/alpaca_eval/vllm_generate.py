@@ -7,11 +7,6 @@ import datasets
 from rich.progress import track
 import torch
 
-# Constants previously imported from safe_rlhf
-PROMPT_BEGIN: str = 'BEGINNING OF CONVERSATION: '
-PROMPT_USER: str = 'USER: {input} '
-PROMPT_ASSISTANT: str = 'ASSISTANT:'  # should not have a space at the end
-PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER + PROMPT_ASSISTANT
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
@@ -57,12 +52,12 @@ def generate_answers(args, model_name_or_path: str, batch_size: int) -> list[dic
 
     # Initialize LLM using all available GPUs
     with torch.no_grad():
-     llm = LLM(model=model_name_or_path, tensor_parallel_size=num_gpus)
+        llm = LLM(model=model_name_or_path, tensor_parallel_size=num_gpus)
     
     eval_set = datasets.load_dataset("tatsu-lab/alpaca_eval", "alpaca_eval")["eval"]
     print(f'Generating answers with {model_name_or_path} using vllm')
     
-    prompts = [PROMPT_INPUT.format(input=example["instruction"]) for example in eval_set]
+    prompts = [example["instruction"] for example in eval_set]
     
     sampling_params = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens)
     
@@ -73,7 +68,7 @@ def generate_answers(args, model_name_or_path: str, batch_size: int) -> list[dic
         
         for prompt, output in zip(batch_prompts, outputs):
             result = {
-                "instruction": prompt[len(PROMPT_INPUT.format(input="")):],  # Extract instruction part
+                "instruction": prompt,  # Extract instruction part
                 "output": output.outputs[0].text,
                 "generator": model_name_or_path
             }
