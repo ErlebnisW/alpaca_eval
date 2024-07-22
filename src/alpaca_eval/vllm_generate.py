@@ -36,23 +36,35 @@ def parse_arguments() -> argparse.Namespace:
         default=32,
         help='Batch size for generation',
     )
+    parser.add_argument(
+        '--temperature',
+        type=float,
+        default=0.7,
+        help='Temperature for sampling',
+    )
+    parser.add_argument(
+        '--max_tokens',
+        type=int,
+        default=2048,
+        help='Maximum number of tokens to generate',
+    )
     return parser.parse_args()
 
-def generate_answers(model_name_or_path: str, batch_size: int) -> list[dict]:
+def generate_answers(args, model_name_or_path: str, batch_size: int) -> list[dict]:
     # Get the number of available GPUs
     num_gpus = torch.cuda.device_count()
     print(f"Using {num_gpus} GPUs")
 
     # Initialize LLM using all available GPUs
     with torch.no_grad():
-    llm = LLM(model=model_name_or_path, tensor_parallel_size=num_gpus)
+     llm = LLM(model=model_name_or_path, tensor_parallel_size=num_gpus)
     
     eval_set = datasets.load_dataset("tatsu-lab/alpaca_eval", "alpaca_eval")["eval"]
     print(f'Generating answers with {model_name_or_path} using vllm')
     
     prompts = [PROMPT_INPUT.format(input=example["instruction"]) for example in eval_set]
     
-    sampling_params = SamplingParams(temperature=0.7, max_tokens=2048)
+    sampling_params = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens)
     
     results = []
     for i in track(range(0, len(prompts), batch_size), description="Generating..."):
@@ -76,7 +88,7 @@ def main() -> None:
     os.makedirs(output_dir, exist_ok=True) 
     generate_file = os.path.join(output_dir, 'generated_answers.json')
     
-    answers = generate_answers(args.model_name_or_path, args.batch_size)
+    answers = generate_answers(args, args.model_name_or_path, args.batch_size)
     
     with open(generate_file, 'w', encoding='utf-8') as f:
         json.dump(answers, f, indent=4, ensure_ascii=False)
